@@ -8,7 +8,7 @@ enum class BookSide
 
 enum class Side
 {
-    but,
+    buy,
     sell
 };
 

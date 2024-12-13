@@ -9,7 +9,7 @@ FONT_DIR = ./font
 BUILD_DIR = ./build
 
 # Source and object files
-SRCS = $(SRC_DIR)/main.cpp $(SRC_DIR)/print.cpp
+SRCS = $(SRC_DIR)/main.cpp $(SRC_DIR)/print.cpp $(SRC_DIR)/orderbook.cpp
 OBJS = $(patsubst $(SRC_DIR)/%.cpp, $(BUILD_DIR)/%.o, $(SRCS))
 
 # Output executable
