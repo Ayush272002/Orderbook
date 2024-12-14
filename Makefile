@@ -10,17 +10,24 @@ BUILD_DIR = ./build
 
 # Source and object files
 SRCS = $(SRC_DIR)/main.cpp $(SRC_DIR)/print.cpp $(SRC_DIR)/orderbook.cpp
+TEST_SRCS = $(SRC_DIR)/test.cpp $(SRC_DIR)/orderbook.cpp
 OBJS = $(patsubst $(SRC_DIR)/%.cpp, $(BUILD_DIR)/%.o, $(SRCS))
+TEST_OBJS = $(patsubst $(SRC_DIR)/%.cpp, $(BUILD_DIR)/%.o, $(TEST_SRCS))
 
-# Output executable
+# Output executables
 TARGET = main
+TEST_TARGET = test
 
 # Default target
 all: $(TARGET)
 
-# Rule to build the executable
+# Rule to build the main executable
 $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^
+
+# Rule to build the test executable
+test: $(TEST_OBJS)
+	$(CXX) $(CXXFLAGS) -o $(BUILD_DIR)/$(TEST_TARGET) $(TEST_OBJS)
 
 # Rule to compile source files to object files
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
@@ -29,11 +36,15 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
 
 # Clean build files
 clean:
-	rm -rf $(BUILD_DIR) $(TARGET)
+	rm -rf $(BUILD_DIR) $(TARGET) $(BUILD_DIR)/$(TEST_TARGET)
 
-# Run the program
+# Run the main program
 run: $(TARGET)
 	./$(TARGET)
 
+# Run the tests
+run_tests: test
+	./$(BUILD_DIR)/$(TEST_TARGET)
+
 # Phony targets
-.PHONY: all clean run
+.PHONY: all clean run run_tests

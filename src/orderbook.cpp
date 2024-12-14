@@ -50,68 +50,84 @@ void Orderbook::cleanLeg(map<double, vector<unique_ptr<Order>>, T> &map)
     for (auto it = map.begin(); it != map.end();)
     {
         if (it->second.empty())
-            it = map.erase(it);
+        {
+            it = map.erase(it); // Erase empty levels
+        }
         else
-            ++it;
+        {
+            int total_quantity = 0;
+            for (const auto &order : it->second)
+            {
+                total_quantity += order->quantity;
+            }
+            if (total_quantity == 0) // Check for zero total quantity
+            {
+                it = map.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
     }
 }
 
 template <typename T>
-pair<int, double> Orderbook::fillOrder(map<double, vector<unique_ptr<Order>>, T> &offers, const OrderType type, const Side side, int &qty, const double price, int &units, double &totalValue)
+pair<int, double> Orderbook::fillOrder(map<double, vector<unique_ptr<Order>>, T> &offers, const OrderType type, const Side side, int &order_quantity, const double price, int &units_transacted, double &total_value)
 {
-    for (auto it = offers.begin(); it != offers.end() && qty > 0;)
+    for (auto rit = offers.rbegin(); rit != offers.rend();)
     {
-        auto &price_level = it->first;
-        auto &quotes = it->second;
+        auto &pair = *rit;
+        double price_level = pair.first;
+        auto &quotes = pair.second;
 
-        bool canTransact = true;
+        bool can_transact = true;
         if (type == OrderType::limit)
         {
             if (side == Side::buy && price_level > price)
-                canTransact = false;
+            {
+                can_transact = false;
+            }
             else if (side == Side::sell && price_level < price)
-                canTransact = false;
+            {
+                can_transact = false;
+            }
         }
 
-        if (canTransact)
+        if (can_transact)
         {
-            for (auto qit = quotes.begin(); qit != quotes.end() && qty > 0;)
+            auto it = quotes.begin();
+            while (it != quotes.end() && order_quantity > 0)
             {
-                int &curr_quote_qty = (*qit)->quantity;
-                const double curr_quote_price = (*qit)->price;
+                int &cur_quote_qty = (*it)->quantity;
+                const double cur_quote_price = (*it)->price;
 
-                if (curr_quote_qty > qty)
+                if (cur_quote_qty > order_quantity)
                 {
-                    units += qty;
-                    totalValue += qty * curr_quote_price;
-                    curr_quote_qty -= qty;
-                    qty = 0;
+                    units_transacted += order_quantity;
+                    total_value += order_quantity * cur_quote_price;
+                    cur_quote_qty -= order_quantity;
+                    order_quantity = 0;
                     break;
                 }
                 else
                 {
-                    units += curr_quote_qty;
-                    totalValue += curr_quote_qty * curr_quote_price;
-                    qty -= curr_quote_qty;
-                    qit = quotes.erase(qit);
+                    units_transacted += cur_quote_qty;
+                    total_value += cur_quote_qty * cur_quote_price;
+                    order_quantity -= cur_quote_qty;
+                    it = quotes.erase(it);
                 }
             }
-
-            if (quotes.empty())
-                it = offers.erase(it);
-            else
-                ++it;
         }
-        else
-        {
-            ++it;
-        }
+        rit++;
     }
 
-    return make_pair(units, totalValue);
+    cleanLeg(offers);
+
+    return make_pair(units_transacted, total_value);
 }
 
-pair<int, double> Orderbook::handleOrder(OrderType type, int qty, Side side, double price)
+pair<int, double> Orderbook::handleOrder(OrderType type, int order_quantity, Side side, double price)
 {
     int units_transacted = 0;
     double total_value = 0;
@@ -120,48 +136,50 @@ pair<int, double> Orderbook::handleOrder(OrderType type, int qty, Side side, dou
     {
         if (side == Side::sell)
         {
-            return fillOrder(bids, type, side, qty, price, units_transacted, total_value);
+            return fillOrder(bids, OrderType::market, Side::sell, order_quantity, price, units_transacted, total_value);
         }
         else if (side == Side::buy)
         {
-            return fillOrder(asks, type, side, qty, price, units_transacted, total_value);
+            return fillOrder(asks, OrderType::market, Side::buy, order_quantity, price, units_transacted, total_value);
         }
     }
     else if (type == OrderType::limit)
     {
         if (side == Side::buy)
         {
-            if (!asks.empty() && bestQuote(BookSide::ask) <= price)
+            if (bestQuote(BookSide::ask) <= price)
             {
-                auto fill = fillOrder(asks, type, side, qty, price, units_transacted, total_value);
-                if (qty > 0)
-                    addOrder(qty, price, BookSide::bid);
+                pair<int, double> fill = fillOrder(asks, OrderType::limit, Side::buy, order_quantity, price, units_transacted, total_value);
+                addOrder(order_quantity, price, BookSide::bid);
                 return fill;
             }
             else
             {
-                addOrder(qty, price, BookSide::bid);
-                return {0, 0};
+                addOrder(order_quantity, price, BookSide::bid);
+                return make_pair(units_transacted, total_value);
             }
         }
-        else if (side == Side::sell)
+        else
         {
-            if (!bids.empty() && bestQuote(BookSide::bid) >= price)
+            if (bestQuote(BookSide::bid) >= price)
             {
-                auto fill = fillOrder(bids, type, side, qty, price, units_transacted, total_value);
-                if (qty > 0)
-                    addOrder(qty, price, BookSide::ask);
+                pair<int, double> fill = fillOrder(bids, OrderType::limit, Side::sell, order_quantity, price, units_transacted, total_value);
+                addOrder(order_quantity, price, BookSide::ask);
                 return fill;
             }
             else
             {
-                addOrder(qty, price, BookSide::ask);
-                return {0, 0};
+                addOrder(order_quantity, price, BookSide::ask);
+                return make_pair(units_transacted, total_value);
             }
         }
     }
+    else
+    {
+        throw runtime_error("Invalid order type encountered");
+    }
 
-    throw runtime_error("Invalid order type encountered");
+    return make_pair(0, 0);
 }
 
 double Orderbook::bestQuote(BookSide side)
@@ -176,10 +194,12 @@ double Orderbook::bestQuote(BookSide side)
     {
         if (asks.empty())
             return 0.0;
-        return asks.begin()->first;
+        return prev(asks.end())->first;
     }
-
-    return 0.0;
+    else
+    {
+        return 0.0;
+    }
 }
 
 template <typename T>
@@ -193,12 +213,15 @@ void Orderbook::printLeg(map<double, vector<unique_ptr<Order>>, T> &hashmap, Boo
             for (const auto &order : pair.second)
                 size_sum += order->quantity;
 
-            string color = "31";
-            cout << "\t\033[1;" << color << "m" << "$" << setw(6) << fixed << setprecision(2) << pair.first << setw(5) << size_sum << "\033[0m ";
+            if (size_sum > 0)
+            {
+                string color = "31";
+                cout << "\t\033[1;" << color << "m" << "$" << setw(6) << fixed << setprecision(2) << pair.first << setw(5) << size_sum << "\033[0m ";
 
-            for (int i = 0; i < size_sum / 10; i++)
-                cout << "█";
-            cout << "\n";
+                for (int i = 0; i < size_sum / 10; i++)
+                    cout << "█";
+                cout << "\n";
+            }
         }
     }
     else if (side == BookSide::bid)
@@ -209,12 +232,15 @@ void Orderbook::printLeg(map<double, vector<unique_ptr<Order>>, T> &hashmap, Boo
             for (const auto &order : pair->second)
                 size_sum += order->quantity;
 
-            string color = "32";
-            cout << "\t\033[1;" << color << "m" << "$" << setw(6) << fixed << setprecision(2) << pair->first << setw(5) << size_sum << "\033[0m ";
+            if (size_sum > 0)
+            {
+                string color = "32";
+                cout << "\t\033[1;" << color << "m" << "$" << setw(6) << fixed << setprecision(2) << pair->first << setw(5) << size_sum << "\033[0m ";
 
-            for (int i = 0; i < size_sum / 10; i++)
-                cout << "█";
-            cout << "\n";
+                for (int i = 0; i < size_sum / 10; i++)
+                    cout << "█";
+                cout << "\n";
+            }
         }
     }
 }
