@@ -2,6 +2,19 @@
 
 This project is a basic implementation of an order book system, simulating a financial order book used in markets (stocks, commodities, or cryptocurrency). It supports both **market** and **limit** orders, allowing you to view and manage the order book through a command-line interface.
 
+## Summary of Time Complexities
+- **Adding an order**: O(log N)
+- **Filling an order (market or limit order)**: O(P * Q)
+- **Best quote**: O(1)
+- **Printing the orderbook**: O(P * Q)
+
+Where:
+- N is the number of unique price levels in the order book (bids or asks).
+- P is the number of price levels.
+- Q is the number of orders per price level. 
+
+In practice, the time complexity can be highly dependent on the density of orders (Q) at each price level and the number of price levels (P) in the order book.
+
 ## Features
 
 - **Market Orders**: Execute orders immediately at the best available price.
