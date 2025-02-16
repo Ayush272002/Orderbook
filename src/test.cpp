@@ -1,35 +1,34 @@
-#include <iostream>
-#include <cassert>
+#include <gtest/gtest.h>
 #include "../headers/order.hpp"
 #include "../headers/orderbook.hpp"
 
-void testAddOrder()
+class OrderbookTest : public ::testing::Test
 {
-    Orderbook orderbook(false);
+protected:
+    Orderbook orderbook = Orderbook(false);
+};
 
+TEST_F(OrderbookTest, AddOrder)
+{
     orderbook.addOrder(100, 100.50, BookSide::bid);
     orderbook.addOrder(200, 101.00, BookSide::ask);
 
     const auto &bids = orderbook.getBids();
     const auto &asks = orderbook.getAsks();
 
-    assert(bids.size() == 1);
-    assert(bids.at(100.50).size() == 1);
-    assert(bids.at(100.50)[0]->quantity == 100);
-    assert(bids.at(100.50)[0]->price == 100.50);
+    ASSERT_EQ(bids.size(), 1);
+    ASSERT_EQ(bids.at(100.50).size(), 1);
+    ASSERT_EQ(bids.at(100.50)[0]->quantity, 100);
+    ASSERT_EQ(bids.at(100.50)[0]->price, 100.50);
 
-    assert(asks.size() == 1);
-    assert(asks.at(101.00).size() == 1);
-    assert(asks.at(101.00)[0]->quantity == 200);
-    assert(asks.at(101.00)[0]->price == 101.00);
-
-    std::cout << "testAddOrder passed!" << std::endl;
+    ASSERT_EQ(asks.size(), 1);
+    ASSERT_EQ(asks.at(101.00).size(), 1);
+    ASSERT_EQ(asks.at(101.00)[0]->quantity, 200);
+    ASSERT_EQ(asks.at(101.00)[0]->price, 101.00);
 }
 
-void testMarketOrderExecution()
+TEST_F(OrderbookTest, MarketOrderExecution)
 {
-    Orderbook orderbook(false);
-
     orderbook.addOrder(100, 100.50, BookSide::bid);
     orderbook.addOrder(150, 100.50, BookSide::bid);
     orderbook.addOrder(200, 101.00, BookSide::ask);
@@ -39,18 +38,13 @@ void testMarketOrderExecution()
 
     const auto &bids = orderbook.getBids();
 
-    assert(unitsTransacted == 200);
-    assert(totalValue == 100.50 * 200);
-
-    assert(bids.at(100.50)[0]->quantity == 50);
-
-    std::cout << "testMarketOrderExecution passed!" << std::endl;
+    ASSERT_EQ(unitsTransacted, 200);
+    ASSERT_DOUBLE_EQ(totalValue, 100.50 * 200);
+    ASSERT_EQ(bids.at(100.50)[0]->quantity, 50);
 }
 
-void testLimitOrderExecution()
+TEST_F(OrderbookTest, LimitOrderExecution)
 {
-    Orderbook orderbook(false);
-
     orderbook.addOrder(100, 100.50, BookSide::bid);
     orderbook.addOrder(200, 101.00, BookSide::ask);
 
@@ -58,37 +52,60 @@ void testLimitOrderExecution()
 
     const auto &asks = orderbook.getAsks();
 
-    assert(unitsTransacted == 150);
-    assert(totalValue == 101.00 * 150);
-
-    assert(asks.at(101.00)[0]->quantity == 50);
-
-    std::cout << "testLimitOrderExecution passed!" << std::endl;
+    ASSERT_EQ(unitsTransacted, 150);
+    ASSERT_DOUBLE_EQ(totalValue, 101.00 * 150);
+    ASSERT_EQ(asks.at(101.00)[0]->quantity, 50);
 }
 
-void testBestQuote()
+TEST_F(OrderbookTest, BestQuote)
 {
-    Orderbook orderbook(false);
-
     orderbook.addOrder(100, 100.50, BookSide::bid);
     orderbook.addOrder(200, 101.00, BookSide::ask);
 
     double bestBid = orderbook.bestQuote(BookSide::bid);
     double bestAsk = orderbook.bestQuote(BookSide::ask);
 
-    assert(bestBid == 100.50);
-    assert(bestAsk == 101.00);
-
-    std::cout << "testBestQuote passed!" << std::endl;
+    ASSERT_DOUBLE_EQ(bestBid, 100.50);
+    ASSERT_DOUBLE_EQ(bestAsk, 101.00);
 }
 
-int main()
+TEST_F(OrderbookTest, EmptyOrderbookBestQuote)
 {
-    testAddOrder();
-    testMarketOrderExecution();
-    testLimitOrderExecution();
-    testBestQuote();
+    ASSERT_DOUBLE_EQ(orderbook.bestQuote(BookSide::bid), 0.0);
+    ASSERT_DOUBLE_EQ(orderbook.bestQuote(BookSide::ask), 0.0);
+}
 
-    std::cout << "All tests passed!" << std::endl;
-    return 0;
+TEST_F(OrderbookTest, MarketOrderWithoutLiquidity)
+{
+    auto [unitsTransacted, totalValue] = orderbook.handleOrder(OrderType::market, 100, Side::buy, 0);
+    ASSERT_EQ(unitsTransacted, 0);
+    ASSERT_DOUBLE_EQ(totalValue, 0.0);
+}
+
+TEST_F(OrderbookTest, LargeMarketOrder)
+{
+    orderbook.addOrder(50, 100.50, BookSide::bid);
+    orderbook.addOrder(50, 100.50, BookSide::bid);
+    orderbook.addOrder(100, 101.00, BookSide::ask);
+
+    auto [unitsTransacted, totalValue] = orderbook.handleOrder(OrderType::market, 200, Side::sell, 0);
+
+    ASSERT_EQ(unitsTransacted, 100);
+    ASSERT_DOUBLE_EQ(totalValue, 100 * 100.50);
+}
+
+TEST_F(OrderbookTest, LimitOrderWithNoImmediateMatch)
+{
+    orderbook.addOrder(100, 99.50, BookSide::bid);
+    orderbook.addOrder(100, 101.50, BookSide::ask);
+
+    auto [unitsTransacted, totalValue] = orderbook.handleOrder(OrderType::limit, 50, Side::buy, 100.00);
+    ASSERT_EQ(unitsTransacted, 0);
+    ASSERT_DOUBLE_EQ(totalValue, 0.0);
+}
+
+int main(int argc, char **argv)
+{
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
 }

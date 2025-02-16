@@ -105,7 +105,9 @@ To view the current order book, you can select the **Print Orderbook** option fr
 
 ## Unit Tests
 
-This project includes unit tests to verify key functionalities of the order book system. The tests are written in C++ and can be executed with the following command:
+This project includes unit tests to verify key functionalities of the order book system. The tests are written in C++ using **Google Test (gtest)**.
+
+To execute the tests:
 
 ```bash
 make run_tests
@@ -117,6 +119,10 @@ The tests include:
 - **`testMarketOrderExecution`**: Ensures that market orders are filled at the best available price.
 - **`testLimitOrderExecution`**: Tests that limit orders are executed only when a matching order is available.
 - **`testBestQuote`**: Ensures that the best bid and ask prices are correctly retrieved.
+- **`testEmptyOrderbookBestQuote`**: Ensures that an empty order book returns zero as the best quote.
+- **`testMarketOrderWithoutLiquidity`**: Tests that a market order without available liquidity does not execute.
+- **`testLargeMarketOrder`**: Ensures that large market orders only fill up to the available liquidity.
+- **`testLimitOrderWithNoImmediateMatch`**: Tests that limit orders are correctly placed without immediate execution if no match exists.
 
 ## Future Improvements
 

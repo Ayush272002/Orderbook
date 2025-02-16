@@ -7,6 +7,9 @@ SRC_DIR = ./src
 HEADERS_DIR = ./headers
 FONT_DIR = ./font
 BUILD_DIR = ./build
+GTEST_DIR = ./googletest
+GTEST_BUILD_DIR = $(GTEST_DIR)/build
+GTEST_LIB_DIR = $(GTEST_BUILD_DIR)/lib
 
 # Source and object files
 SRCS = $(SRC_DIR)/main.cpp $(SRC_DIR)/print.cpp $(SRC_DIR)/orderbook.cpp
@@ -19,15 +22,20 @@ TARGET = main
 TEST_TARGET = test
 
 # Default target
-all: $(TARGET)
+all: $(TARGET) test
 
 # Rule to build the main executable
 $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
+# Rule to build Google Test
+$(GTEST_LIB_DIR)/libgtest.a:
+	@mkdir -p $(GTEST_BUILD_DIR)
+	cd $(GTEST_BUILD_DIR) && cmake .. && make
+
 # Rule to build the test executable
-test: $(TEST_OBJS)
-	$(CXX) $(CXXFLAGS) -o $(BUILD_DIR)/$(TEST_TARGET) $(TEST_OBJS)
+test: $(TEST_OBJS) $(GTEST_LIB_DIR)/libgtest.a $(GTEST_LIB_DIR)/libgtest_main.a
+	$(CXX) $(CXXFLAGS) -I$(GTEST_DIR)/include -pthread -o $(BUILD_DIR)/$(TEST_TARGET) $(TEST_OBJS) $(GTEST_LIB_DIR)/libgtest.a $(GTEST_LIB_DIR)/libgtest_main.a
 
 # Rule to compile source files to object files
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
@@ -36,7 +44,7 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
 
 # Clean build files
 clean:
-	rm -rf $(BUILD_DIR) $(TARGET) $(BUILD_DIR)/$(TEST_TARGET)
+	rm -rf $(BUILD_DIR) $(TARGET) $(BUILD_DIR)/$(TEST_TARGET) $(GTEST_BUILD_DIR)
 
 # Run the main program
 run: $(TARGET)
